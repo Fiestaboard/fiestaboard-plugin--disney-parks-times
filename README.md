@@ -5,7 +5,7 @@ Display wait times for Disney parks and rides (Disneyland, California Adventure,
 **→ [Setup Guide](./docs/SETUP.md)** – Configure parks and rides in Integrations
 
 <!-- Add a screenshot of the plugin display once you have one -->
-![Disney Park Queue Times Display](./docs/disney-parks-times-display.png)
+![Disney Park Queue Times Display](./docs/board-display.png)
 
 ## Overview
 
