@@ -1,9 +1,15 @@
 """Tests for the disney_parks_times plugin."""
 
+import json
+from pathlib import Path
+
 import pytest
 from unittest.mock import patch, Mock
 
 from plugins.disney_parks_times import DisneyParksTimesPlugin, _tiny_abbr
+
+MANIFEST_PATH = Path(__file__).resolve().parent.parent / "manifest.json"
+REQUIRED_VAR_FIELDS = {"description", "type", "max_length", "group", "example"}
 
 
 class TestDisneyParksTimesPlugin:
@@ -268,3 +274,77 @@ class TestTinyAbbr:
         """Empty or whitespace name returns empty string."""
         assert _tiny_abbr("") == ""
         assert _tiny_abbr("   ") == ""
+
+
+class TestManifestMetadata:
+    """Validate the rich variable metadata in manifest.json."""
+
+    @pytest.fixture(autouse=True)
+    def load_manifest(self):
+        with open(MANIFEST_PATH) as f:
+            self.manifest = json.load(f)
+        self.variables = self.manifest["variables"]
+        self.simple = self.variables["simple"]
+        self.groups = self.variables["groups"]
+
+    def test_required_top_level_fields(self):
+        for field in ("id", "name", "version"):
+            assert field in self.manifest
+
+    def test_simple_is_dict(self):
+        assert isinstance(self.simple, dict), "variables.simple must be a dict, not a list"
+
+    def test_expected_simple_variable_count(self):
+        assert len(self.simple) == 1
+
+    def test_all_expected_simple_vars_present(self):
+        assert set(self.simple.keys()) == {"formatted"}
+
+    def test_each_simple_variable_has_required_fields(self):
+        for var_name, meta in self.simple.items():
+            missing = REQUIRED_VAR_FIELDS - set(meta.keys())
+            assert not missing, f"{var_name} missing fields: {missing}"
+
+    def test_groups_section_exists(self):
+        assert isinstance(self.groups, dict)
+        assert len(self.groups) >= 1
+
+    def test_every_variable_references_valid_group(self):
+        for var_name, meta in self.simple.items():
+            assert meta["group"] in self.groups, (
+                f"{var_name} references unknown group '{meta['group']}'"
+            )
+
+    def test_max_length_is_positive_int(self):
+        for var_name, meta in self.simple.items():
+            ml = meta["max_length"]
+            assert isinstance(ml, int) and ml > 0, (
+                f"{var_name}: max_length must be a positive int, got {ml}"
+            )
+
+    def test_type_values_are_valid(self):
+        allowed = {"string", "number", "boolean"}
+        for var_name, meta in self.simple.items():
+            assert meta["type"] in allowed, (
+                f"{var_name}: invalid type '{meta['type']}'"
+            )
+
+    def test_arrays_section_has_parks(self):
+        arrays = self.variables.get("arrays", {})
+        assert "parks" in arrays, "parks array must be defined"
+        assert "item_fields" in arrays["parks"]
+        assert "label_field" in arrays["parks"]
+
+    def test_parks_sub_arrays_has_rides(self):
+        parks = self.variables["arrays"]["parks"]
+        assert "sub_arrays" in parks, "parks must have sub_arrays"
+        rides = parks["sub_arrays"]["rides"]
+        assert "label_field" in rides
+        assert "item_fields" in rides
+        expected_fields = {"ride_name", "ride_abbr", "tiny_abbr", "wait_time", "is_open", "status", "state_color", "formatted"}
+        assert set(rides["item_fields"]) == expected_fields
+
+    def test_max_lengths_keys_use_dot_star_notation(self):
+        ml = self.manifest.get("max_lengths", {})
+        for key in ml:
+            assert "." in key, f"max_lengths key '{key}' should use dot-star notation"
