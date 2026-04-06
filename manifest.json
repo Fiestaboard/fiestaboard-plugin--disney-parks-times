@@ -1,7 +1,7 @@
 {
   "id": "disney_parks_times",
   "name": "Disney Parks Queue Times",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Display wait times for Disney parks (Disneyland, California Adventure, Disney World, etc.) from Queue-Times.com",
   "author": "FiestaBoard Team",
   "repository": "https://github.com/Fiestaboard/fiestaboard-plugin--disney-parks-times",
@@ -113,5 +113,43 @@
       "caption": "Display wait times for Disney parks (Disneyland, California Adventure, Disney World, etc.) from Queue-Times.com",
       "primary": true
     }
-  ]
+  ],
+  "demo": {
+    "name": "Disney Wait Times Demo",
+    "device_type": "flagship",
+    "template": [
+      "{{disney_parks_times.parks.0.park_name}}",
+      "{{disney_parks_times.formatted}}",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "line_metadata": [
+      {
+        "alignment": "center",
+        "wrap": false
+      },
+      {
+        "alignment": "left",
+        "wrap": true
+      },
+      {
+        "alignment": "left",
+        "wrap": false
+      },
+      {
+        "alignment": "left",
+        "wrap": false
+      },
+      {
+        "alignment": "left",
+        "wrap": false
+      },
+      {
+        "alignment": "left",
+        "wrap": false
+      }
+    ]
+  }
 }
