@@ -52,6 +52,7 @@ _KNOWN_TINY_ABBR: List[tuple] = [
     ("navi river journey", "NRJ"),
     ("peter pan's flight", "PPF"),
     ("pirates of the caribbean", "POTC"),
+    ("radiator springs", "RADIA"),
     ("rise of the resistance", "RISE"),
     ("rock n roller coaster", "RNR"),
     ("rock 'n' roller coaster", "RNR"),
@@ -70,6 +71,7 @@ _KNOWN_TINY_ABBR: List[tuple] = [
     ("toy story mania", "TSMM"),
     ("toy story midway mania", "TSMM"),
     ("twilight zone tower of terror", "TOT"),
+    ("web slingers", "WEBSL"),
 ]
 
 
