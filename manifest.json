@@ -117,22 +117,36 @@
   "demo": {
     "name": "Disney Wait Times Demo",
     "device_type": "flagship",
+    "config": {
+      "enabled": true,
+      "refresh_seconds": 300,
+      "parks": [
+        {
+          "park_id": 16,
+          "ride_ids": [13958, 326, 307, 11526, 289]
+        },
+        {
+          "park_id": 17,
+          "ride_ids": [329, 8843, 295, 312, 322]
+        }
+      ]
+    },
     "template": [
-      "{{disney_parks_times.parks.0.park_name}}",
-      "{{disney_parks_times.formatted}}",
-      "",
-      "",
-      "",
-      ""
+      "{63}{67}{65}{66}{64} DISNEYLAND {64}{66}{65}{67}{63}",
+      "{{disney_parks_times.parks.0.rides.0.formatted}}{{disney_parks_times.parks.1.rides.0.formatted}}",
+      "{{disney_parks_times.parks.0.rides.1.formatted}}{{disney_parks_times.parks.1.rides.1.formatted}}",
+      "{{disney_parks_times.parks.0.rides.2.formatted}}{{disney_parks_times.parks.1.rides.2.formatted}}",
+      "{{disney_parks_times.parks.0.rides.3.formatted}}{{disney_parks_times.parks.1.rides.3.formatted}}",
+      "{{disney_parks_times.parks.0.rides.4.formatted}}{{disney_parks_times.parks.1.rides.4.formatted}}"
     ],
     "line_metadata": [
       {
-        "alignment": "center",
+        "alignment": "left",
         "wrap": false
       },
       {
         "alignment": "left",
-        "wrap": true
+        "wrap": false
       },
       {
         "alignment": "left",

@@ -249,6 +249,8 @@ class TestTinyAbbr:
         assert _tiny_abbr("It's a Small World") == "SMALL"
         assert _tiny_abbr("Indiana Jones Adventure") == "INDY"
         assert _tiny_abbr("Buzz Lightyear Astro Blasters") == "BUZZ"
+        assert _tiny_abbr("Radiator Springs Racers") == "RADIA"
+        assert _tiny_abbr("WEB SLINGERS: A Spider-Man Adventure") == "WEBSL"
 
     def test_unknown_ride_fallback(self):
         """Unknown ride name falls back to first 5 chars (spaces removed)."""
