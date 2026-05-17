@@ -1,7 +1,7 @@
 {
   "id": "disney_parks_times",
   "name": "Disney Parks Queue Times",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Display wait times for Disney parks (Disneyland, California Adventure, Disney World, etc.) from Queue-Times.com",
   "author": "FiestaBoard Team",
   "repository": "https://github.com/Fiestaboard/fiestaboard-plugin--disney-parks-times",
@@ -115,55 +115,90 @@
     }
   ],
   "demo": {
-    "name": "Disney Wait Times Demo",
-    "device_type": "flagship",
-    "config": {
-      "enabled": true,
-      "refresh_seconds": 300,
-      "parks": [
+    "flagship": {
+      "name": "Disney Wait Times Demo",
+      "config": {
+        "enabled": true,
+        "refresh_seconds": 300,
+        "parks": [
+          {
+            "park_id": 16,
+            "ride_ids": [
+              13958,
+              326,
+              307,
+              11526,
+              289
+            ]
+          },
+          {
+            "park_id": 17,
+            "ride_ids": [
+              329,
+              8843,
+              295,
+              312,
+              322
+            ]
+          }
+        ]
+      },
+      "template": [
+        "{63}{67}{65}{66}{64} DISNEYLAND {64}{66}{65}{67}{63}",
+        "{{disney_parks_times.parks.0.rides.0.formatted}}{{disney_parks_times.parks.1.rides.0.formatted}}",
+        "{{disney_parks_times.parks.0.rides.1.formatted}}{{disney_parks_times.parks.1.rides.1.formatted}}",
+        "{{disney_parks_times.parks.0.rides.2.formatted}}{{disney_parks_times.parks.1.rides.2.formatted}}",
+        "{{disney_parks_times.parks.0.rides.3.formatted}}{{disney_parks_times.parks.1.rides.3.formatted}}",
+        "{{disney_parks_times.parks.0.rides.4.formatted}}{{disney_parks_times.parks.1.rides.4.formatted}}"
+      ],
+      "line_metadata": [
         {
-          "park_id": 16,
-          "ride_ids": [13958, 326, 307, 11526, 289]
+          "alignment": "left",
+          "wrap": false
         },
         {
-          "park_id": 17,
-          "ride_ids": [329, 8843, 295, 312, 322]
+          "alignment": "left",
+          "wrap": false
+        },
+        {
+          "alignment": "left",
+          "wrap": false
+        },
+        {
+          "alignment": "left",
+          "wrap": false
+        },
+        {
+          "alignment": "left",
+          "wrap": false
+        },
+        {
+          "alignment": "left",
+          "wrap": false
         }
       ]
     },
-    "template": [
-      "{63}{67}{65}{66}{64} DISNEYLAND {64}{66}{65}{67}{63}",
-      "{{disney_parks_times.parks.0.rides.0.formatted}}{{disney_parks_times.parks.1.rides.0.formatted}}",
-      "{{disney_parks_times.parks.0.rides.1.formatted}}{{disney_parks_times.parks.1.rides.1.formatted}}",
-      "{{disney_parks_times.parks.0.rides.2.formatted}}{{disney_parks_times.parks.1.rides.2.formatted}}",
-      "{{disney_parks_times.parks.0.rides.3.formatted}}{{disney_parks_times.parks.1.rides.3.formatted}}",
-      "{{disney_parks_times.parks.0.rides.4.formatted}}{{disney_parks_times.parks.1.rides.4.formatted}}"
-    ],
-    "line_metadata": [
-      {
-        "alignment": "left",
-        "wrap": false
-      },
-      {
-        "alignment": "left",
-        "wrap": false
-      },
-      {
-        "alignment": "left",
-        "wrap": false
-      },
-      {
-        "alignment": "left",
-        "wrap": false
-      },
-      {
-        "alignment": "left",
-        "wrap": false
-      },
-      {
-        "alignment": "left",
-        "wrap": false
-      }
-    ]
+    "note": {
+      "name": "Disney Wait Times (Note)",
+      "template": [
+        "WAIT TIMES",
+        "{{disney_parks_times.parks.0.rides.0.formatted}}",
+        "{{disney_parks_times.parks.0.rides.1.formatted}}"
+      ],
+      "line_metadata": [
+        {
+          "alignment": "left",
+          "wrap": false
+        },
+        {
+          "alignment": "left",
+          "wrap": false
+        },
+        {
+          "alignment": "left",
+          "wrap": false
+        }
+      ]
+    }
   }
 }
