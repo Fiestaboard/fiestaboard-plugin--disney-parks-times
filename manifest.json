@@ -1,7 +1,7 @@
 {
   "id": "disney_parks_times",
   "name": "Disney Parks Queue Times",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Display wait times for Disney parks (Disneyland, California Adventure, Disney World, etc.) from Queue-Times.com",
   "author": "FiestaBoard Team",
   "repository": "https://github.com/Fiestaboard/fiestaboard-plugin--disney-parks-times",
