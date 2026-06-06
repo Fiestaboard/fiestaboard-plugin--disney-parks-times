@@ -205,7 +205,7 @@ class DisneyParksTimesPlugin(PluginBase):
                 park_name = _get_park_name(park_id)
                 parks_data.append({
                     "park_id": park_id,
-                    "park_name": park_name[:22],
+                    "park_name": park_name,
                     "rides": [{"ride_id": 0, "ride_name": "Unavailable", "ride_abbr": "Unavail", "tiny_abbr": "Unavl", "wait_time": 0, "is_open": False, "status": "Error", "state_color": "{63}", "formatted": "{63}Unavl --  "}],  # Pad to FORMATTED_TILES (11)
                 })
                 continue
@@ -247,7 +247,7 @@ class DisneyParksTimesPlugin(PluginBase):
             rides_out.sort(key=lambda r: order.get(r["ride_id"], 999))
             parks_data.append({
                 "park_id": park_id,
-                "park_name": park_name[:22],
+                "park_name": park_name,
                 "rides": rides_out,
             })
 
