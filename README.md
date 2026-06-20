@@ -15,6 +15,7 @@ The plugin fetches live wait times from the free Queue-Times.com API. You select
 
 - Multiple Disney parks (Disneyland, California Adventure, Magic Kingdom, Epcot, Hollywood Studios, Animal Kingdom, and other Disney resorts)
 - Multiple rides per park; pick only the ones you care about
+- Reorder rides and assign custom display names per ride in settings
 - User-friendly park and ride names in settings (no raw IDs)
 - Optional template variables for custom pages
 - Default 6-line display with attribution
@@ -33,9 +34,11 @@ The plugin fetches live wait times from the free Queue-Times.com API. You select
 ### Parks array
 
 - `{{disney_parks_times.parks.0.park_name}}` – First park name
-- `{{disney_parks_times.parks.0.rides.0.ride_name}}` – Full ride name
-- `{{disney_parks_times.parks.0.rides.0.ride_abbr}}` – Abbreviated ride name (up to 14 chars, word-boundary aware)
-- `{{disney_parks_times.parks.0.rides.0.tiny_abbr}}` – Very short name (max 5 chars, no spaces) for compact display
+- `{{disney_parks_times.parks.0.rides.0.ride_name}}` – Full ride name from Queue-Times (always the real name)
+- `{{disney_parks_times.parks.0.rides.0.ride_label}}` – Display label: your custom name when set, otherwise the real ride name. The abbreviations and `formatted` string below derive from this label.
+- `{{disney_parks_times.parks.0.rides.0.ride_abbr}}` – Abbreviated ride label (up to 14 chars, word-boundary aware)
+- `{{disney_parks_times.parks.0.rides.0.tiny_abbr}}` – Very short label (max 5 chars, no spaces) for compact display
+- `{{disney_parks_times.parks.0.rides.0.custom_name}}` – The custom name you assigned to this ride, or empty if none
 - `{{disney_parks_times.parks.0.rides.0.wait_time}}` – Wait time in minutes
 - `{{disney_parks_times.parks.0.rides.0.is_open}}` – true/false
 - `{{disney_parks_times.parks.0.rides.0.status}}` – "Open" or "Closed"

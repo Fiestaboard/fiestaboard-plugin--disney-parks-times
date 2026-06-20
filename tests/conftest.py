@@ -29,7 +29,7 @@ def sample_manifest():
             "simple": {
                 "formatted": {"description": "Pre-formatted ride wait times display", "type": "string", "max_length": 22, "group": "display", "example": "Space Mtn: 45m"},
             },
-            "arrays": {"parks": {"label_field": "park_name", "item_fields": ["park_name"], "sub_arrays": {"rides": {"label_field": "ride_name", "item_fields": ["ride_name", "ride_abbr", "tiny_abbr", "wait_time", "is_open", "status", "state_color", "formatted"]}}}},
+            "arrays": {"parks": {"label_field": "park_name", "item_fields": ["park_name"], "sub_arrays": {"rides": {"label_field": "ride_label", "item_fields": ["ride_name", "ride_label", "ride_abbr", "tiny_abbr", "custom_name", "wait_time", "is_open", "status", "state_color", "formatted"]}}}},
         },
         "max_lengths": {"parks.*.park_name": 22, "parks.*.rides.*.ride_name": 22},
     }

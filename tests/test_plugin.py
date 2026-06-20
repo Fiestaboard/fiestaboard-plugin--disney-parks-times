@@ -93,6 +93,70 @@ class TestDisneyParksTimesPlugin:
         assert len(result.formatted_lines) <= 6
 
     @patch("plugins.disney_parks_times.requests.get")
+    def test_ride_label_falls_back_to_real_name(
+        self, mock_get, sample_manifest, sample_config, parks_json_response, queue_times_json_response
+    ):
+        """Without custom_names, ride_label mirrors the real Queue-Times ride name."""
+        def side_effect(url, timeout=None):
+            if "parks.json" in url:
+                return Mock(json=Mock(return_value=parks_json_response), raise_for_status=Mock())
+            if "queue_times.json" in url:
+                return Mock(json=Mock(return_value=queue_times_json_response), raise_for_status=Mock())
+            return Mock(json=Mock(return_value=[]), raise_for_status=Mock())
+
+        mock_get.side_effect = side_effect
+        plugin = DisneyParksTimesPlugin(sample_manifest)
+        plugin.config = sample_config
+        plugin._cache = None
+
+        result = plugin.fetch_data()
+
+        rides = result.data["parks"][0]["rides"]
+        for ride in rides:
+            assert ride["ride_label"] == ride["ride_name"]
+            # No override configured -> custom_name is empty.
+            assert ride["custom_name"] == ""
+
+    @patch("plugins.disney_parks_times.requests.get")
+    def test_custom_names_and_order_honored(
+        self, mock_get, sample_manifest, parks_json_response, queue_times_json_response
+    ):
+        """custom_names override the label and ride_ids order drives display order."""
+        def side_effect(url, timeout=None):
+            if "parks.json" in url:
+                return Mock(json=Mock(return_value=parks_json_response), raise_for_status=Mock())
+            if "queue_times.json" in url:
+                return Mock(json=Mock(return_value=queue_times_json_response), raise_for_status=Mock())
+            return Mock(json=Mock(return_value=[]), raise_for_status=Mock())
+
+        mock_get.side_effect = side_effect
+        plugin = DisneyParksTimesPlugin(sample_manifest)
+        # Reversed order vs. the API, and a custom label keyed by string id.
+        plugin.config = {
+            "parks": [
+                {"park_id": 16, "ride_ids": [279, 284], "custom_names": {"284": "The Rocket"}},
+            ],
+            "refresh_seconds": 300,
+        }
+        plugin._cache = None
+
+        result = plugin.fetch_data()
+
+        rides = result.data["parks"][0]["rides"]
+        # Order follows ride_ids ([279, 284]), not the API order or id sort.
+        assert [r["ride_id"] for r in rides] == [279, 284]
+        # Matterhorn has no custom name -> custom_name empty, label is the real name.
+        assert rides[0]["ride_name"] == "Matterhorn Bobsleds"
+        assert rides[0]["custom_name"] == ""
+        assert rides[0]["ride_label"] == "Matterhorn Bobsleds"
+        # Space Mountain keeps its real name, exposes the raw override, and uses it as the label.
+        assert rides[1]["ride_name"] == "Space Mountain"
+        assert rides[1]["custom_name"] == "The Rocket"
+        assert rides[1]["ride_label"] == "The Rocket"
+        # Display fields derive from the custom label.
+        assert rides[1]["ride_abbr"] == "The Rocket"
+
+    @patch("plugins.disney_parks_times.requests.get")
     def test_fetch_data_api_error(self, mock_get, sample_manifest, sample_config):
         """fetch_data returns partial data with Unavailable when API fails for a park."""
         mock_get.side_effect = Exception("Network error")
@@ -343,8 +407,53 @@ class TestManifestMetadata:
         rides = parks["sub_arrays"]["rides"]
         assert "label_field" in rides
         assert "item_fields" in rides
-        expected_fields = {"ride_name", "ride_abbr", "tiny_abbr", "wait_time", "is_open", "status", "state_color", "formatted"}
+        expected_fields = {"ride_name", "ride_label", "ride_abbr", "tiny_abbr", "custom_name", "wait_time", "is_open", "status", "state_color", "formatted"}
         assert set(rides["item_fields"]) == expected_fields
+
+    def _iter_array_fields(self):
+        """Yield (context, field_name, meta) for every array/sub-array item field."""
+        def walk(arrays, prefix=""):
+            for arr_name, arr_spec in arrays.items():
+                ctx = f"{prefix}{arr_name}"
+                fields = arr_spec.get("item_fields", {})
+                assert isinstance(fields, dict), (
+                    f"{ctx}.item_fields must be a dict of name->definition, got {type(fields).__name__}"
+                )
+                for field_name, meta in fields.items():
+                    yield ctx, field_name, meta
+                yield from walk(arr_spec.get("sub_arrays", {}), prefix=f"{ctx}.")
+        yield from walk(self.variables.get("arrays", {}))
+
+    def test_each_array_field_has_required_fields(self):
+        for ctx, field_name, meta in self._iter_array_fields():
+            missing = REQUIRED_VAR_FIELDS - set(meta.keys())
+            assert not missing, f"{ctx}.{field_name} missing fields: {missing}"
+
+    def test_array_fields_reference_valid_groups(self):
+        for ctx, field_name, meta in self._iter_array_fields():
+            assert meta["group"] in self.groups, (
+                f"{ctx}.{field_name} references unknown group '{meta['group']}'"
+            )
+
+    def test_array_field_types_and_max_lengths_valid(self):
+        allowed = {"string", "number", "boolean"}
+        for ctx, field_name, meta in self._iter_array_fields():
+            assert meta["type"] in allowed, f"{ctx}.{field_name}: invalid type '{meta['type']}'"
+            ml = meta["max_length"]
+            assert isinstance(ml, int) and ml > 0, (
+                f"{ctx}.{field_name}: max_length must be a positive int, got {ml}"
+            )
+
+    def test_array_label_fields_reference_defined_fields(self):
+        def walk(arrays, prefix=""):
+            for arr_name, arr_spec in arrays.items():
+                ctx = f"{prefix}{arr_name}"
+                label = arr_spec.get("label_field")
+                assert label in arr_spec.get("item_fields", {}), (
+                    f"{ctx}.label_field '{label}' is not a defined item field"
+                )
+                walk(arr_spec.get("sub_arrays", {}), prefix=f"{ctx}.")
+        walk(self.variables.get("arrays", {}))
 
     def test_max_lengths_keys_use_dot_star_notation(self):
         ml = self.manifest.get("max_lengths", {})

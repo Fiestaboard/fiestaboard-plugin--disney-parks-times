@@ -15,6 +15,8 @@ Show live wait times for Disney parks and rides on your board. No API key requir
    - Click **Add park**.
    - Choose a **park** from the dropdown (e.g. Disneyland, Magic Kingdom). Only Disney parks are listed; names are shown, not IDs.
    - Use **Add ride…** to pick which rides to show. Again, only names are shown.
+   - Use the reorder controls to set the order rides appear on the board.
+   - Optionally give a ride a **custom name** which will be used in place of the ride’s given name.
    - Add more parks if you want; for each park, select the rides you care about.
 5. Optionally set **Refresh interval (seconds)** (default 300). Queue-Times updates about every 5 minutes, so shorter intervals won’t get newer data from the API.
 6. Save.
