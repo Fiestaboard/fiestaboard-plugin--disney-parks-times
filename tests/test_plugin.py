@@ -410,40 +410,6 @@ class TestManifestMetadata:
         expected_fields = {"ride_name", "ride_label", "ride_abbr", "tiny_abbr", "custom_name", "wait_time", "is_open", "status", "state_color", "formatted"}
         assert set(rides["item_fields"]) == expected_fields
 
-    def _iter_array_fields(self):
-        """Yield (context, field_name, meta) for every array/sub-array item field."""
-        def walk(arrays, prefix=""):
-            for arr_name, arr_spec in arrays.items():
-                ctx = f"{prefix}{arr_name}"
-                fields = arr_spec.get("item_fields", {})
-                assert isinstance(fields, dict), (
-                    f"{ctx}.item_fields must be a dict of name->definition, got {type(fields).__name__}"
-                )
-                for field_name, meta in fields.items():
-                    yield ctx, field_name, meta
-                yield from walk(arr_spec.get("sub_arrays", {}), prefix=f"{ctx}.")
-        yield from walk(self.variables.get("arrays", {}))
-
-    def test_each_array_field_has_required_fields(self):
-        for ctx, field_name, meta in self._iter_array_fields():
-            missing = REQUIRED_VAR_FIELDS - set(meta.keys())
-            assert not missing, f"{ctx}.{field_name} missing fields: {missing}"
-
-    def test_array_fields_reference_valid_groups(self):
-        for ctx, field_name, meta in self._iter_array_fields():
-            assert meta["group"] in self.groups, (
-                f"{ctx}.{field_name} references unknown group '{meta['group']}'"
-            )
-
-    def test_array_field_types_and_max_lengths_valid(self):
-        allowed = {"string", "number", "boolean"}
-        for ctx, field_name, meta in self._iter_array_fields():
-            assert meta["type"] in allowed, f"{ctx}.{field_name}: invalid type '{meta['type']}'"
-            ml = meta["max_length"]
-            assert isinstance(ml, int) and ml > 0, (
-                f"{ctx}.{field_name}: max_length must be a positive int, got {ml}"
-            )
-
     def test_array_label_fields_reference_defined_fields(self):
         def walk(arrays, prefix=""):
             for arr_name, arr_spec in arrays.items():

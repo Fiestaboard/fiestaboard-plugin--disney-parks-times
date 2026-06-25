@@ -99,6 +99,7 @@
             "label_field": "ride_name",
             "item_fields": [
               "ride_name",
+              "ride_label",
               "ride_abbr",
               "tiny_abbr",
               "custom_name",
