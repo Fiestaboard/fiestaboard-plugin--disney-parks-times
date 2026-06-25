@@ -1,7 +1,7 @@
 {
   "id": "disney_parks_times",
   "name": "Disney Parks Queue Times",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "Display wait times for Disney parks (Disneyland, California Adventure, Disney World, etc.) from Queue-Times.com",
   "author": "FiestaBoard Team",
   "repository": "https://github.com/Fiestaboard/fiestaboard-plugin--disney-parks-times",
@@ -22,6 +22,10 @@
         "title": "Parks and rides",
         "description": "Select one or more Disney parks and the rides to show wait times for.",
         "ui:widget": "disney-parks-times-picker",
+        "ui:options": {
+          "customRideNames": true,
+          "reorderRides": true
+        },
         "items": {
           "type": "object",
           "properties": {
@@ -34,6 +38,14 @@
               "title": "Rides",
               "items": {
                 "type": "integer"
+              }
+            },
+            "custom_names": {
+              "type": "object",
+              "title": "Custom ride names",
+              "description": "Optional map of ride ID (as a string) to a custom display label.",
+              "additionalProperties": {
+                "type": "string"
               }
             }
           },
@@ -59,6 +71,12 @@
     "groups": {
       "display": {
         "label": "Display"
+      },
+      "parks": {
+        "label": "Parks"
+      },
+      "rides": {
+        "label": "Rides"
       }
     },
     "simple": {
@@ -67,7 +85,7 @@
         "type": "string",
         "max_length": 22,
         "group": "display",
-        "example": "Space Mtn: 45m"
+        "example": "Big Thunder: 45m"
       }
     },
     "arrays": {
@@ -81,8 +99,10 @@
             "label_field": "ride_name",
             "item_fields": [
               "ride_name",
+              "ride_label",
               "ride_abbr",
               "tiny_abbr",
+              "custom_name",
               "wait_time",
               "is_open",
               "status",
@@ -98,14 +118,16 @@
   "max_lengths": {
     "parks.*.park_name": 22,
     "parks.*.rides.*.ride_name": 22,
+    "parks.*.rides.*.ride_label": 22,
     "parks.*.rides.*.ride_abbr": 14,
     "parks.*.rides.*.tiny_abbr": 5,
+    "parks.*.rides.*.custom_name": 22,
     "parks.*.rides.*.wait_time": 3,
     "parks.*.rides.*.status": 10,
     "parks.*.rides.*.state_color": 4,
     "parks.*.rides.*.formatted": 22
   },
-  "fiestaboard_version": ">=2.10.0",
+  "fiestaboard_version": ">=7.10.0",
   "screenshots": [
     {
       "src": "docs/board-display.png",

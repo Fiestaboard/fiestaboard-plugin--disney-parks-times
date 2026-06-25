@@ -186,6 +186,9 @@ class DisneyParksTimesPlugin(PluginBase):
         for entry in parks_config:
             park_id = entry.get("park_id")
             ride_ids = entry.get("ride_ids") or []
+            # Per-ride custom display labels, keyed by ride id as a string ("2": "The Haunted House").
+            # Old configs won't have this; treat missing/None as an empty map.
+            custom_names = entry.get("custom_names") or {}
             if park_id is None or not ride_ids:
                 continue
             try:
@@ -206,7 +209,7 @@ class DisneyParksTimesPlugin(PluginBase):
                 parks_data.append({
                     "park_id": park_id,
                     "park_name": park_name,
-                    "rides": [{"ride_id": 0, "ride_name": "Unavailable", "ride_abbr": "Unavail", "tiny_abbr": "Unavl", "wait_time": 0, "is_open": False, "status": "Error", "state_color": "{63}", "formatted": "{63}Unavl --  "}],  # Pad to FORMATTED_TILES (11)
+                    "rides": [{"ride_id": 0, "ride_name": "Unavailable", "ride_label": "Unavailable", "ride_abbr": "Unavail", "tiny_abbr": "Unavl", "custom_name": "", "wait_time": 0, "is_open": False, "status": "Error", "state_color": "{63}", "formatted": "{63}Unavl --  "}],  # Pad to FORMATTED_TILES (11)
                 })
                 continue
 
@@ -221,8 +224,10 @@ class DisneyParksTimesPlugin(PluginBase):
                     is_open = ride.get("is_open", False)
                     status = "Open" if is_open else "Closed"
                     name = (ride.get("name") or str(rid)).strip()
-                    ride_abbr = _abbreviate_ride_name(name)
-                    tiny_abbr = _tiny_abbr(name)
+                    custom_name = (custom_names.get(str(rid)) or "").strip()
+                    label = custom_name or name
+                    ride_abbr = _abbreviate_ride_name(label)
+                    tiny_abbr = _tiny_abbr(label)
                     state_color = COLOR_OPEN if is_open else COLOR_CLOSED
                     wait_str = f"{wait}m" if is_open else "--"
                     # No space between color and abbr so the board doesn't show a blank tile
@@ -234,8 +239,10 @@ class DisneyParksTimesPlugin(PluginBase):
                     rides_out.append({
                         "ride_id": rid,
                         "ride_name": name,
+                        "ride_label": label,
                         "ride_abbr": ride_abbr,
                         "tiny_abbr": tiny_abbr,
+                        "custom_name": custom_name,
                         "wait_time": wait,
                         "is_open": is_open,
                         "status": status,
