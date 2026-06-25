@@ -211,11 +211,13 @@ class TestDisneyParksTimesPlugin:
         assert lines is None
 
     def test_cleanup(self, sample_manifest):
-        """cleanup clears cache."""
+        """cleanup clears cache and config snapshot."""
         plugin = DisneyParksTimesPlugin(sample_manifest)
         plugin._cache = {"parks": []}
+        plugin._cache_config = {"parks": [{"park_id": 16, "ride_ids": [284]}]}
         plugin.cleanup()
         assert plugin._cache is None
+        assert plugin._cache_config is None
 
     @patch("plugins.disney_parks_times.requests.get")
     def test_fetch_data_uses_cache_within_refresh(
@@ -249,6 +251,71 @@ class TestDisneyParksTimesPlugin:
         assert result2.data is result1.data
         # No additional requests when using cache
         assert mock_get.call_count == first_call_count
+
+    @patch("plugins.disney_parks_times.requests.get")
+    def test_cache_invalidated_when_custom_name_changes(
+        self, mock_get, sample_manifest, parks_json_response, queue_times_json_response
+    ):
+        """Updating a custom name bypasses the cache and reflects immediately."""
+        def side_effect(url, timeout=None):
+            if "parks.json" in url:
+                return Mock(json=Mock(return_value=parks_json_response), raise_for_status=Mock())
+            if "queue_times.json" in url:
+                return Mock(json=Mock(return_value=queue_times_json_response), raise_for_status=Mock())
+            return Mock(json=Mock(return_value=[]), raise_for_status=Mock())
+
+        mock_get.side_effect = side_effect
+        plugin = DisneyParksTimesPlugin(sample_manifest)
+        plugin.config = {"parks": [{"park_id": 16, "ride_ids": [284], "custom_names": {}}], "refresh_seconds": 300}
+        plugin._cache = None
+
+        result1 = plugin.fetch_data()
+        assert result1.available is True
+        rides1 = result1.data["parks"][0]["rides"]
+        assert rides1[0]["ride_label"] == "Space Mountain"
+        call_count_after_first = mock_get.call_count
+
+        # Change the custom name in config and fetch again within TTL
+        plugin.config = {"parks": [{"park_id": 16, "ride_ids": [284], "custom_names": {"284": "The Rocket"}}], "refresh_seconds": 300}
+        result2 = plugin.fetch_data()
+
+        assert result2.available is True
+        rides2 = result2.data["parks"][0]["rides"]
+        assert rides2[0]["ride_label"] == "The Rocket"
+        assert rides2[0]["custom_name"] == "The Rocket"
+        # A new API call must have been made (cache was invalidated)
+        assert mock_get.call_count > call_count_after_first
+
+    @patch("plugins.disney_parks_times.requests.get")
+    def test_cache_invalidated_when_ride_order_changes(
+        self, mock_get, sample_manifest, parks_json_response, queue_times_json_response
+    ):
+        """Changing ride order bypasses the cache and reflects the new sequence immediately."""
+        def side_effect(url, timeout=None):
+            if "parks.json" in url:
+                return Mock(json=Mock(return_value=parks_json_response), raise_for_status=Mock())
+            if "queue_times.json" in url:
+                return Mock(json=Mock(return_value=queue_times_json_response), raise_for_status=Mock())
+            return Mock(json=Mock(return_value=[]), raise_for_status=Mock())
+
+        mock_get.side_effect = side_effect
+        plugin = DisneyParksTimesPlugin(sample_manifest)
+        plugin.config = {"parks": [{"park_id": 16, "ride_ids": [284, 279], "custom_names": {}}], "refresh_seconds": 300}
+        plugin._cache = None
+
+        result1 = plugin.fetch_data()
+        assert result1.available is True
+        assert [r["ride_id"] for r in result1.data["parks"][0]["rides"]] == [284, 279]
+        call_count_after_first = mock_get.call_count
+
+        # Reverse ride order within TTL
+        plugin.config = {"parks": [{"park_id": 16, "ride_ids": [279, 284], "custom_names": {}}], "refresh_seconds": 300}
+        result2 = plugin.fetch_data()
+
+        assert result2.available is True
+        assert [r["ride_id"] for r in result2.data["parks"][0]["rides"]] == [279, 284]
+        # A new API call must have been made (cache was invalidated)
+        assert mock_get.call_count > call_count_after_first
 
     def test_fetch_data_no_parks_data_returns_error(self, sample_manifest):
         """When no valid park config (e.g. invalid park_id), fetch_data returns available=False."""

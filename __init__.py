@@ -4,6 +4,7 @@ Displays wait times for Disney parks and rides from Queue-Times.com.
 Data is updated every 5 minutes by the API. Attribution required.
 """
 
+import copy
 import logging
 import time
 from typing import Any, Dict, List, Optional
@@ -144,6 +145,7 @@ class DisneyParksTimesPlugin(PluginBase):
         super().__init__(manifest)
         self._cache: Optional[Dict[str, Any]] = None
         self._cache_time: float = 0
+        self._cache_config: Optional[Dict[str, Any]] = None
 
     @property
     def plugin_id(self) -> str:
@@ -174,7 +176,7 @@ class DisneyParksTimesPlugin(PluginBase):
         # Optional: use cached result if within TTL
         refresh = self.config.get("refresh_seconds", 300)
         now = time.time()
-        if self._cache and (now - self._cache_time) < refresh:
+        if self._cache and (now - self._cache_time) < refresh and self._cache_config == self.config:
             lines = self._build_formatted_lines(self._cache)
             return PluginResult(
                 available=True,
@@ -270,6 +272,7 @@ class DisneyParksTimesPlugin(PluginBase):
         }
         self._cache = result_data
         self._cache_time = time.time()
+        self._cache_config = copy.deepcopy(self.config)
         lines = self._build_formatted_lines(result_data)
         return PluginResult(
             available=True,
@@ -309,6 +312,7 @@ class DisneyParksTimesPlugin(PluginBase):
 
     def cleanup(self) -> None:
         self._cache = None
+        self._cache_config = None
         logger.debug("%s cleanup", self.plugin_id)
 
 
