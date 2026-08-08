@@ -136,6 +136,28 @@
       "primary": true
     }
   ],
+  "teaser": "SPACE MTN 45MIN",
+  "previews": [
+    {
+      "device_type": "flagship",
+      "rows": [
+        "{63}{63}{63}{63}{63}{63}{63}{63}{63}{63}{63}{63}{63}{63}{63}{63}{63}{63}{63}{63}{63}{63}",
+        "SPACE MOUNTAIN   45MIN",
+        "MATTERHORN BOBS  30MIN",
+        "PIRATES CARIBBN  15MIN",
+        "HAUNTED MANSION  20MIN",
+        "SPLASH MOUNTAIN  60MIN"
+      ]
+    },
+    {
+      "device_type": "note",
+      "rows": [
+        "WAIT TIMES",
+        "SPACE MTN 45MIN",
+        "PIRATES   15MIN"
+      ]
+    }
+  ],
   "demo": {
     "flagship": {
       "name": "Disney Wait Times Demo",
