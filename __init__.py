@@ -11,7 +11,14 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from src.plugins.base import PluginBase, PluginResult
+from src.plugins.base import (
+    Option,
+    OptionsRequest,
+    OptionsResult,
+    OptionsUnavailable,
+    PluginBase,
+    PluginResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -117,25 +124,79 @@ def _tiny_abbr(name: str, max_len: int = TINY_ABBR_LEN) -> str:
 _park_names_cache: Dict[int, str] = {}
 _park_names_cache_time: float = 0
 
+# Module-level cache of the full Disney park records from parks.json. The name
+# cache above answers "what is park 16 called"; this one keeps the extra fields
+# (country) the settings picker shows. Both are module-level on purpose: core
+# runs get_options on a throwaway instance, so per-instance state would never
+# survive to the next keystroke.
+_park_catalog_cache: List[Dict[str, Any]] = []
+_park_catalog_cache_time: float = 0
+
+
+def _fetch_disney_parks() -> List[Dict[str, Any]]:
+    """Return the Walt Disney Attractions park records from parks.json.
+
+    Cached module-side for CACHE_TTL. Raises on upstream failure so callers can
+    decide between a fallback (fetch_data) and an inline hint (get_options).
+    """
+    global _park_catalog_cache, _park_catalog_cache_time, _park_names_cache, _park_names_cache_time
+    now = time.time()
+    # Guard on the timestamp rather than on the list being non-empty, so an
+    # upstream response that legitimately contains no Disney parks is still
+    # cached for CACHE_TTL instead of being re-fetched on every single call.
+    if _park_catalog_cache_time and (now - _park_catalog_cache_time) < CACHE_TTL:
+        return _park_catalog_cache
+
+    resp = requests.get(f"{QUEUE_TIMES_BASE}/parks.json", timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+    parks: List[Dict[str, Any]] = []
+    for group in data or []:
+        if group.get("id") == DISNEY_GROUP_ID:
+            parks = list(group.get("parks", []))
+            break
+
+    _park_catalog_cache = parks
+    _park_catalog_cache_time = now
+    # Keep the name cache in step so fetch_data() benefits from the same call.
+    _park_names_cache = {p["id"]: p.get("name", str(p["id"])) for p in parks if "id" in p}
+    _park_names_cache_time = now
+    return parks
+
 
 def _get_park_name(park_id: int) -> str:
     """Resolve park_id to display name via parks.json (cached)."""
-    global _park_names_cache, _park_names_cache_time
-    now = time.time()
-    if now - _park_names_cache_time > CACHE_TTL and park_id not in _park_names_cache:
-        try:
-            resp = requests.get(f"{QUEUE_TIMES_BASE}/parks.json", timeout=10)
-            resp.raise_for_status()
-            data = resp.json()
-            for group in data:
-                if group.get("id") == DISNEY_GROUP_ID:
-                    for p in group.get("parks", []):
-                        _park_names_cache[p["id"]] = p.get("name", str(p["id"]))
-                    break
-            _park_names_cache_time = now
-        except Exception as e:
-            logger.warning("Failed to fetch park names: %s", e)
+    if park_id in _park_names_cache:
+        return _park_names_cache[park_id]
+    try:
+        _fetch_disney_parks()
+    except Exception as e:
+        logger.warning("Failed to fetch park names: %s", e)
     return _park_names_cache.get(park_id, f"Park {park_id}")
+
+
+def _paginate(options: List[Option], request: OptionsRequest) -> OptionsResult:
+    """Apply the request's query filter and limit to an in-memory option list.
+
+    Both catalogs are small enough to fetch whole, so filtering and paging
+    happen here rather than upstream. ``total`` counts everything matching the
+    query, not just the page returned.
+    """
+    query = (request.query or "").strip().lower()
+    if query:
+        options = [o for o in options if query in (o.label or "").lower()]
+
+    total = len(options)
+    limit = request.limit
+    if limit is not None and limit >= 0:
+        page = options[:limit]
+    else:
+        page = options
+    return OptionsResult(
+        options=page,
+        has_more=len(page) < total,
+        total=total,
+    )
 
 
 class DisneyParksTimesPlugin(PluginBase):
@@ -164,6 +225,87 @@ class DisneyParksTimesPlugin(PluginBase):
             if not ride_ids:
                 errors.append(f"Park entry {i + 1}: select at least one ride")
         return errors
+
+    def get_options(self, request: OptionsRequest) -> OptionsResult:
+        """Browse the Queue-Times catalog for the settings pickers.
+
+        Serves both ``options_id``s the manifest declares: ``parks`` (every
+        Disney park) and ``rides`` (the rides of the park chosen in the parent
+        field). Reuses the same HTTP path and module-level cache as
+        ``fetch_data`` so opening the dialog does not double the upstream load.
+        """
+        if request.options_id == "parks":
+            options = self._park_options()
+        elif request.options_id == "rides":
+            options = self._ride_options(request)
+        else:
+            raise NotImplementedError(request.options_id)
+
+        return _paginate(options, request)
+
+    def _park_options(self) -> List[Option]:
+        """Every Disney park, alphabetically."""
+        try:
+            parks = _fetch_disney_parks()
+        except Exception as e:
+            logger.warning("Queue-Times park catalog unavailable: %s", e)
+            raise OptionsUnavailable("Could not reach Queue-Times.com to list parks") from e
+
+        options = [
+            Option(
+                value=p["id"],
+                label=(p.get("name") or str(p["id"])).strip(),
+                description=(p.get("country") or "").strip() or None,
+            )
+            for p in parks
+            if p.get("id") is not None
+        ]
+        options.sort(key=lambda o: o.label.lower())
+        return options
+
+    def _ride_options(self, request: OptionsRequest) -> List[Option]:
+        """The rides of the park named in request.parent['park_id'].
+
+        With no parent park chosen there is no sensible catalog to show, so the
+        list is empty rather than every ride Disney operates worldwide.
+        """
+        raw_park_id = (request.parent or {}).get("park_id")
+        if raw_park_id is None or raw_park_id == "":
+            return []
+        try:
+            park_id = int(raw_park_id)
+        except (TypeError, ValueError):
+            return []
+
+        try:
+            resp = requests.get(
+                f"{QUEUE_TIMES_BASE}/parks/{park_id}/queue_times.json",
+                timeout=10,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e:
+            logger.warning("Queue-Times ride catalog unavailable for park %s: %s", park_id, e)
+            raise OptionsUnavailable("Could not reach Queue-Times.com to list rides") from e
+
+        options: List[Option] = []
+        for land in (data or {}).get("lands", []) or []:
+            land_name = (land.get("name") or "").strip() or None
+            for ride in land.get("rides", []) or []:
+                rid = ride.get("id")
+                if rid is None:
+                    continue
+                is_open = bool(ride.get("is_open"))
+                wait = ride.get("wait_time", 0) or 0
+                options.append(
+                    Option(
+                        value=rid,
+                        label=(ride.get("name") or str(rid)).strip(),
+                        group=land_name,
+                        preview=f"{wait}m" if is_open else "closed",
+                    )
+                )
+        return options
 
     def fetch_data(self) -> PluginResult:
         parks_config = self.config.get("parks", [])

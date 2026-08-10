@@ -1,7 +1,7 @@
 {
   "id": "disney_parks_times",
   "name": "Disney Parks Queue Times",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "Display wait times for Disney parks (Disneyland, California Adventure, Disney World, etc.) from Queue-Times.com",
   "author": "FiestaBoard Team",
   "repository": "https://github.com/Fiestaboard/fiestaboard-plugin--disney-parks-times",
@@ -21,23 +21,38 @@
         "type": "array",
         "title": "Parks and rides",
         "description": "Select one or more Disney parks and the rides to show wait times for.",
-        "ui:widget": "disney-parks-times-picker",
-        "ui:options": {
-          "customRideNames": true,
-          "reorderRides": true
-        },
         "items": {
           "type": "object",
           "properties": {
             "park_id": {
               "type": "integer",
-              "title": "Park"
+              "title": "Park",
+              "ui:widget": "remote-options",
+              "ui:options": {
+                "options_id": "parks",
+                "placeholder": "Choose a park",
+                "cache_seconds": 3600
+              }
             },
             "ride_ids": {
               "type": "array",
               "title": "Rides",
+              "description": "Rides are shown on the board in the order you select them.",
               "items": {
                 "type": "integer"
+              },
+              "ui:widget": "remote-options",
+              "ui:options": {
+                "options_id": "rides",
+                "depends_on": [
+                  "park_id"
+                ],
+                "multiple": true,
+                "searchable": true,
+                "reorderable": true,
+                "labels_field": "custom_names",
+                "placeholder": "Choose rides",
+                "cache_seconds": 300
               }
             },
             "custom_names": {
@@ -127,7 +142,7 @@
     "parks.*.rides.*.state_color": 4,
     "parks.*.rides.*.formatted": 22
   },
-  "fiestaboard_version": ">=7.10.0",
+  "fiestaboard_version": ">=8.25.0",
   "screenshots": [
     {
       "src": "docs/board-display.png",

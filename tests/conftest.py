@@ -5,8 +5,92 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def reset_plugin_singletons():
-    """Reset plugin singletons before each test."""
+    """Clear the module-level catalog caches so tests cannot leak into each other."""
+    import plugins.disney_parks_times as mod
+
+    mod._park_names_cache = {}
+    mod._park_names_cache_time = 0
+    mod._park_catalog_cache = []
+    mod._park_catalog_cache_time = 0
     yield
+    mod._park_names_cache = {}
+    mod._park_names_cache_time = 0
+    mod._park_catalog_cache = []
+    mod._park_catalog_cache_time = 0
+
+
+# Queue-Times catalog used by the get_options providers. Deliberately includes a
+# non-Disney operator group and three Disney parks in non-alphabetical order.
+FULL_PARKS_JSON = [
+    {
+        "id": 1,
+        "name": "Merlin Entertainments",
+        "parks": [{"id": 1, "name": "Alton Towers", "country": "United Kingdom"}],
+    },
+    {
+        "id": 2,
+        "name": "Walt Disney Attractions",
+        "parks": [
+            {"id": 16, "name": "Disneyland", "country": "United States"},
+            {"id": 6, "name": "Magic Kingdom", "country": "United States"},
+            {"id": 17, "name": "Disney California Adventure", "country": "United States"},
+        ],
+    },
+]
+
+# Per-park ride catalogs, keyed by park id.
+PARK_RIDES_JSON = {
+    16: {
+        "lands": [
+            {
+                "id": 117,
+                "name": "Tomorrowland",
+                "rides": [
+                    {"id": 284, "name": "Space Mountain", "is_open": True, "wait_time": 45},
+                    {"id": 279, "name": "Matterhorn Bobsleds", "is_open": False, "wait_time": 0},
+                ],
+            },
+            {
+                "id": 118,
+                "name": "New Orleans Square",
+                "rides": [
+                    {"id": 291, "name": "Haunted Mansion", "is_open": True, "wait_time": 25},
+                ],
+            },
+        ],
+        "rides": [],
+    },
+    17: {
+        "lands": [
+            {
+                "id": 201,
+                "name": "Cars Land",
+                "rides": [
+                    {"id": 329, "name": "Radiator Springs Racers", "is_open": True, "wait_time": 90},
+                ],
+            },
+        ],
+        "rides": [],
+    },
+    6: {"lands": [], "rides": []},
+}
+
+
+@pytest.fixture
+def patched_queue_times():
+    """Patch requests.get with the full Queue-Times catalog above."""
+    from unittest.mock import Mock, patch
+
+    def side_effect(url, timeout=None):
+        if "parks.json" in url:
+            return Mock(json=Mock(return_value=FULL_PARKS_JSON), raise_for_status=Mock())
+        for pid, payload in PARK_RIDES_JSON.items():
+            if f"/parks/{pid}/queue_times.json" in url:
+                return Mock(json=Mock(return_value=payload), raise_for_status=Mock())
+        raise AssertionError(f"unexpected URL: {url}")
+
+    with patch("plugins.disney_parks_times.requests.get", side_effect=side_effect) as m:
+        yield m
 
 
 @pytest.fixture
