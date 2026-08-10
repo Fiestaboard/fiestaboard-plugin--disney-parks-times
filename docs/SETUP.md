@@ -14,7 +14,7 @@ Show live wait times for Disney parks and rides on your board. No API key requir
 4. Under **Parks and rides**:
    - Click **Add park**.
    - Choose a **park** from the dropdown (e.g. Disneyland, Magic Kingdom). Only Disney parks are listed; names are shown, not IDs.
-   - Use **Add ride…** to pick which rides to show. Again, only names are shown.
+   - Use **Add ride…** to pick which rides to show. Again, only names are shown. Rides are grouped by land, each shows its current wait time, and there is a search box for parks with long ride lists.
    - Use the reorder controls to set the order rides appear on the board.
    - Optionally give a ride a **custom name** which will be used in place of the ride’s given name.
    - Add more parks if you want; for each park, select the rides you care about.
@@ -37,8 +37,9 @@ Ride lists are loaded when you select a park; pick the rides you want to display
 
 ## Troubleshooting
 
-- **No parks or rides in dropdowns** – The app fetches lists from the FiestaBoard API (which proxies Queue-Times). Ensure the API is reachable and not blocked.
-- **“Failed to fetch parks/rides”** – The Queue-Times service may be temporarily unavailable. Try again later.
+- **No rides in the ride list** – Choose a park first. The ride list is scoped to the selected park and stays empty until there is one.
+- **No parks in the dropdown** – The plugin fetches the list from Queue-Times when you open the settings dialog. Ensure outbound access to `queue-times.com` is not blocked.
+- **“Could not reach Queue-Times.com…”** – The service was unreachable while the dialog was open. Your saved selection is untouched; reopen the picker to retry.
 - **Wait times show 0 or “Closed”** – Data comes directly from Queue-Times; the plugin does not modify it. Parks may show 0 during off-hours or maintenance.
 
 ## Attribution
