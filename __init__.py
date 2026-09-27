@@ -25,11 +25,13 @@ logger = logging.getLogger(__name__)
 QUEUE_TIMES_BASE = "https://queue-times.com"
 DISNEY_GROUP_ID = 2  # Walt Disney Attractions
 CACHE_TTL = 300  # 5 minutes
-MAX_LINE_LEN = 22
-RIDE_ABBR_LEN = 14  # Abbreviated ride name for board display (fits "  Name: 99m" in 22 chars)
+# Two general-purpose abbreviation lengths offered as template variables
+# (ride_abbr / tiny_abbr). These are independent of any particular board --
+# a template author picks whichever fits where they place it -- unlike the
+# whole-board layout in _build_formatted_lines/_ride_line, which derives
+# every width from the board actually being rendered.
+RIDE_ABBR_LEN = 14  # Medium abbreviation for board display
 TINY_ABBR_LEN = 5  # Very short abbreviation for compact display
-# Fixed width in tiles so multiple formatted on one line align (1 color + 5 abbr + 1 space + wait = 8-9; pad to 11 so two fit in 22)
-FORMATTED_TILES = 11
 
 # Board color codes for state_color / formatted
 COLOR_OPEN = "{66}"   # green - operating normally
@@ -120,6 +122,55 @@ def _tiny_abbr(name: str, max_len: int = TINY_ABBR_LEN) -> str:
     return base
 
 
+_HEADER_VARIANTS = ("DISNEY QUEUE TIMES", "QUEUE TIMES", "WAIT TIMES")
+_FOOTER_TEXT = "Queue-Times.com"
+
+
+def _header_line(cols: int) -> str:
+    """Widest header text that fits ``cols`` tiles, centered.
+
+    Derived from the board rather than assuming a 22-wide layout: a Note
+    (15 wide) cannot show "DISNEY QUEUE TIMES" (18) so it falls back to a
+    shorter variant instead of truncating mid-word.
+    """
+    for variant in _HEADER_VARIANTS:
+        if len(variant) <= cols:
+            return variant.center(cols)
+    return _HEADER_VARIANTS[-1][:cols]
+
+
+def _footer_line(cols: int) -> Optional[str]:
+    """Attribution line, or ``None`` when it cannot fit ``cols`` tiles at all."""
+    if len(_FOOTER_TEXT) > cols:
+        return None
+    return _FOOTER_TEXT.ljust(cols)
+
+
+def _ride_line(ride: Dict[str, Any], cols: int) -> str:
+    """One ride's status line, reflowed to ``cols`` tiles.
+
+    Prefers the full ride name/label and falls back to the medium (14-char)
+    then tiny (5-char) abbreviation only as available width shrinks -- so a
+    wider board shows a longer label, never the reverse. The result is
+    always truncated to ``cols`` as a final guarantee.
+    """
+    is_open = bool(ride.get("is_open"))
+    wait_time = ride.get("wait_time", 0) or 0
+    wait_str = f"{wait_time}m" if is_open else "Closed"
+    budget = max(0, cols - len(": ") - len(wait_str))
+
+    label = (ride.get("ride_label") or ride.get("ride_name") or "").strip()
+    chosen: Optional[str] = None
+    for candidate in (label, ride.get("ride_abbr") or "", ride.get("tiny_abbr") or ""):
+        if candidate and len(candidate) <= budget:
+            chosen = candidate
+            break
+    if chosen is None:
+        chosen = (ride.get("tiny_abbr") or "")[:budget]
+
+    return f"{chosen}: {wait_str}"[:cols]
+
+
 # Module-level cache for park names (id -> name)
 _park_names_cache: Dict[int, str] = {}
 _park_names_cache_time: float = 0
@@ -204,9 +255,43 @@ class DisneyParksTimesPlugin(PluginBase):
 
     def __init__(self, manifest: Dict[str, Any]):
         super().__init__(manifest)
-        self._cache: Optional[Dict[str, Any]] = None
-        self._cache_time: float = 0
+        # Keyed by board geometry (see _geometry_key), not just config equality.
+        # PluginBase.get_data() already caches per geometry, but this plugin's
+        # own inner TTL cache is also consulted directly by get_formatted_display()
+        # (which bypasses that outer cache) -- without a geometry component here
+        # too, a payload cached while rendering one board size could be handed
+        # back verbatim for a different one within the refresh window
+        # (FAILURE CLASS F6).
+        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._cache_time: Dict[str, float] = {}
         self._cache_config: Optional[Dict[str, Any]] = None
+
+    def _board_dims(self) -> "tuple[int, int]":
+        """(rows, cols) for the board currently rendering.
+
+        ``self.board`` is ``None`` outside a board-scoped render (unit tests,
+        legacy callers) -- treated as a 22x6 Flagship so nothing here ever
+        crashes for lack of a board.
+        """
+        board = self.board
+        if board is None:
+            return 6, 22
+        return board.rows, board.cols
+
+    def _geometry_key(self) -> str:
+        """Cache key for the board currently rendering.
+
+        Mirrors ``PluginBase._cache_key``: Flagship/Note are fixed-size so
+        their device_type is a sufficient key, but note arrays all share
+        device_type "note_array" while varying in size, so dimensions are
+        folded in to avoid a 30x12 panel and a 120x3 array colliding.
+        """
+        board = self.board
+        if board is None:
+            return "_default"
+        if board.device_type == "note_array":
+            return f"note_array:{board.cols}x{board.rows}"
+        return board.device_type
 
     @property
     def plugin_id(self) -> str:
@@ -315,14 +400,19 @@ class DisneyParksTimesPlugin(PluginBase):
                 error="No parks configured. Add at least one park and select rides."
             )
 
-        # Optional: use cached result if within TTL
+        rows, cols = self._board_dims()
+        geo_key = self._geometry_key()
+
+        # Optional: use cached result if within TTL, for THIS board geometry.
         refresh = self.config.get("refresh_seconds", 300)
         now = time.time()
-        if self._cache and (now - self._cache_time) < refresh and self._cache_config == self.config:
-            lines = self._build_formatted_lines(self._cache)
+        cached = self._cache.get(geo_key)
+        cached_time = self._cache_time.get(geo_key, 0.0)
+        if cached and (now - cached_time) < refresh and self._cache_config == self.config:
+            lines = self._build_formatted_lines(cached, rows, cols)
             return PluginResult(
                 available=True,
-                data=self._cache,
+                data=cached,
                 formatted_lines=lines,
             )
 
@@ -353,7 +443,7 @@ class DisneyParksTimesPlugin(PluginBase):
                 parks_data.append({
                     "park_id": park_id,
                     "park_name": park_name,
-                    "rides": [{"ride_id": 0, "ride_name": "Unavailable", "ride_label": "Unavailable", "ride_abbr": "Unavail", "tiny_abbr": "Unavl", "custom_name": "", "wait_time": 0, "is_open": False, "status": "Error", "state_color": "{63}", "formatted": "{63}Unavl --  "}],  # Pad to FORMATTED_TILES (11)
+                    "rides": [{"ride_id": 0, "ride_name": "Unavailable", "ride_label": "Unavailable", "ride_abbr": "Unavail", "tiny_abbr": "Unavl", "custom_name": "", "wait_time": 0, "is_open": False, "status": "Error", "state_color": "{63}", "formatted": "{63}Unavl --"}],
                 })
                 continue
 
@@ -374,12 +464,12 @@ class DisneyParksTimesPlugin(PluginBase):
                     tiny_abbr = _tiny_abbr(label)
                     state_color = COLOR_OPEN if is_open else COLOR_CLOSED
                     wait_str = f"{wait}m" if is_open else "--"
-                    # No space between color and abbr so the board doesn't show a blank tile
-                    base = f"{state_color}{tiny_abbr:<5} {wait_str}"
-                    # Pad to fixed tile count so multiple formatted on same line align (color=1 + 5 + 1 + len(wait_str) tiles)
-                    tile_count = 1 + 5 + 1 + len(wait_str)
-                    pad = max(0, FORMATTED_TILES - tile_count)
-                    formatted = base + (" " * pad)
+                    # No space between color and abbr so the board doesn't show a blank tile.
+                    # Not padded to a fixed tile count: this per-ride field is a template
+                    # variable a user may place on any board, so it must not assume a
+                    # target board width (that assumption -- padding to fit two per
+                    # 22-wide line -- was the bug; see _ride_line for the whole-board path).
+                    formatted = f"{state_color}{tiny_abbr:<5} {wait_str}"
                     rides_out.append({
                         "ride_id": rid,
                         "ride_name": name,
@@ -410,50 +500,63 @@ class DisneyParksTimesPlugin(PluginBase):
 
         result_data: Dict[str, Any] = {
             "parks": parks_data,
-            "formatted": "Queue Times"[:22],
+            "formatted": "Queue Times",
         }
-        self._cache = result_data
-        self._cache_time = time.time()
+        self._cache[geo_key] = result_data
+        self._cache_time[geo_key] = now
         self._cache_config = copy.deepcopy(self.config)
-        lines = self._build_formatted_lines(result_data)
+        lines = self._build_formatted_lines(result_data, rows, cols)
         return PluginResult(
             available=True,
             data=result_data,
             formatted_lines=lines,
         )
 
-    def _build_formatted_lines(self, data: Dict[str, Any]) -> List[str]:
-        """Build 6-line default display; include attribution."""
-        lines: List[str] = []
-        lines.append("DISNEY QUEUE TIMES".center(22)[:22])
-        flat: List[tuple] = []  # (park_name, ride_abbr, wait_time, is_open)
+    def _build_formatted_lines(self, data: Dict[str, Any], rows: int, cols: int) -> List[str]:
+        """Board display lines sized to (rows, cols).
+
+        Reflows rather than truncating: a taller board shows more rides
+        (never a fixed count), a wider one shows longer per-ride labels (see
+        _ride_line). Rows may come back shorter than the board -- never
+        longer, never wider -- so this never pads with blank filler just to
+        hit a target height.
+        """
+        rides: List[Dict[str, Any]] = []
         for park in data.get("parks", []):
-            for ride in park.get("rides", []):
-                flat.append((
-                    ride.get("ride_abbr") or (ride.get("ride_name") or "")[:RIDE_ABBR_LEN],
-                    ride.get("wait_time", 0),
-                    ride.get("is_open", False),
-                ))
-        for rabbr, wait, is_open in flat[:4]:
-            if is_open:
-                line = f"{rabbr}: {wait}m"
-            else:
-                line = f"{rabbr}: Closed"
-            lines.append(line[:22])
-        while len(lines) < 5:
-            lines.append("")
-        lines.append("Queue-Times.com".ljust(22)[:22])  # Attribution
-        return lines[:6]
+            rides.extend(park.get("rides", []))
+
+        header_rows = 1
+        footer_text = _footer_line(cols)
+        footer_rows = 0
+        if footer_text is not None and (rows - header_rows - 1) >= 2:
+            # Only spend a row on attribution when it leaves room for at
+            # least two ride lines -- on a very short board (e.g. the
+            # wide-short 120x3 array), content wins over attribution.
+            footer_rows = 1
+
+        available_for_rides = max(0, rows - header_rows - footer_rows)
+
+        lines: List[str] = [_header_line(cols)]
+        for ride in rides[:available_for_rides]:
+            lines.append(_ride_line(ride, cols))
+        if footer_rows:
+            lines.append(footer_text)
+        return lines[:rows]
 
     def get_formatted_display(self) -> Optional[List[str]]:
-        if not self._cache:
+        geo_key = self._geometry_key()
+        cached = self._cache.get(geo_key)
+        if not cached:
             result = self.fetch_data()
             if not result.available:
                 return None
-        return self._build_formatted_lines(self._cache or {})
+            cached = self._cache.get(geo_key) or {}
+        rows, cols = self._board_dims()
+        return self._build_formatted_lines(cached, rows, cols)
 
     def cleanup(self) -> None:
-        self._cache = None
+        self._cache = {}
+        self._cache_time = {}
         self._cache_config = None
         logger.debug("%s cleanup", self.plugin_id)
 

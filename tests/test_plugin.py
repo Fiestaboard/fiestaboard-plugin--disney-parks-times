@@ -69,8 +69,8 @@ class TestDisneyParksTimesPlugin:
         mock_get.side_effect = side_effect
         plugin = DisneyParksTimesPlugin(sample_manifest)
         plugin.config = sample_config
-        plugin._cache = None
-        plugin._cache_time = 0
+        plugin._cache = {}
+        plugin._cache_time = {}
 
         result = plugin.fetch_data()
 
@@ -107,7 +107,7 @@ class TestDisneyParksTimesPlugin:
         mock_get.side_effect = side_effect
         plugin = DisneyParksTimesPlugin(sample_manifest)
         plugin.config = sample_config
-        plugin._cache = None
+        plugin._cache = {}
 
         result = plugin.fetch_data()
 
@@ -138,7 +138,7 @@ class TestDisneyParksTimesPlugin:
             ],
             "refresh_seconds": 300,
         }
-        plugin._cache = None
+        plugin._cache = {}
 
         result = plugin.fetch_data()
 
@@ -162,7 +162,7 @@ class TestDisneyParksTimesPlugin:
         mock_get.side_effect = Exception("Network error")
         plugin = DisneyParksTimesPlugin(sample_manifest)
         plugin.config = sample_config
-        plugin._cache = None
+        plugin._cache = {}
 
         result = plugin.fetch_data()
 
@@ -193,7 +193,7 @@ class TestDisneyParksTimesPlugin:
         mock_get.side_effect = side_effect
         plugin = DisneyParksTimesPlugin(sample_manifest)
         plugin.config = sample_config
-        plugin._cache = None
+        plugin._cache = {}
 
         lines = plugin.get_formatted_display()
 
@@ -206,17 +206,19 @@ class TestDisneyParksTimesPlugin:
         """get_formatted_display returns None when no config and no cache."""
         plugin = DisneyParksTimesPlugin(sample_manifest)
         plugin.config = {}
-        plugin._cache = None
+        plugin._cache = {}
         lines = plugin.get_formatted_display()
         assert lines is None
 
     def test_cleanup(self, sample_manifest):
-        """cleanup clears cache and config snapshot."""
+        """cleanup clears cache (every geometry) and config snapshot."""
         plugin = DisneyParksTimesPlugin(sample_manifest)
-        plugin._cache = {"parks": []}
+        plugin._cache = {"_default": {"parks": []}, "note": {"parks": []}}
+        plugin._cache_time = {"_default": 123.0, "note": 456.0}
         plugin._cache_config = {"parks": [{"park_id": 16, "ride_ids": [284]}]}
         plugin.cleanup()
-        assert plugin._cache is None
+        assert plugin._cache == {}
+        assert plugin._cache_time == {}
         assert plugin._cache_config is None
 
     @patch("plugins.disney_parks_times.requests.get")
@@ -240,7 +242,7 @@ class TestDisneyParksTimesPlugin:
         mock_get.side_effect = side_effect
         plugin = DisneyParksTimesPlugin(sample_manifest)
         plugin.config = {**sample_config, "refresh_seconds": 300}
-        plugin._cache = None
+        plugin._cache = {}
 
         result1 = plugin.fetch_data()
         assert result1.available is True
@@ -267,7 +269,7 @@ class TestDisneyParksTimesPlugin:
         mock_get.side_effect = side_effect
         plugin = DisneyParksTimesPlugin(sample_manifest)
         plugin.config = {"parks": [{"park_id": 16, "ride_ids": [284], "custom_names": {}}], "refresh_seconds": 300}
-        plugin._cache = None
+        plugin._cache = {}
 
         result1 = plugin.fetch_data()
         assert result1.available is True
@@ -301,7 +303,7 @@ class TestDisneyParksTimesPlugin:
         mock_get.side_effect = side_effect
         plugin = DisneyParksTimesPlugin(sample_manifest)
         plugin.config = {"parks": [{"park_id": 16, "ride_ids": [284, 279], "custom_names": {}}], "refresh_seconds": 300}
-        plugin._cache = None
+        plugin._cache = {}
 
         result1 = plugin.fetch_data()
         assert result1.available is True
@@ -322,7 +324,7 @@ class TestDisneyParksTimesPlugin:
         plugin = DisneyParksTimesPlugin(sample_manifest)
         # Invalid park_id so the loop never appends to parks_data
         plugin.config = {"parks": [{"park_id": "not_an_int", "ride_ids": [284]}]}
-        plugin._cache = None
+        plugin._cache = {}
 
         result = plugin.fetch_data()
 
@@ -350,16 +352,18 @@ class TestDisneyParksTimesPlugin:
         mock_get.side_effect = side_effect
         plugin = DisneyParksTimesPlugin(sample_manifest)
         plugin.config = sample_config
-        plugin._cache = None
+        plugin._cache = {}
 
         lines = plugin.get_formatted_display()
 
         assert lines is not None
-        assert len(lines) == 6
+        # Reflowed, not padded: with only 2 rides configured there is no
+        # reason to emit blank filler lines just to hit a fixed height.
+        assert len(lines) <= 6
         assert "DISNEY" in (lines[0] or "") and "QUEUE" in (lines[0] or "")
-        assert "Queue-Times.com" in (lines[5] or "")
+        assert "Queue-Times.com" in (lines[-1] or "")
         # At least one ride line (Space Mountain 60m from fixture)
-        assert any("60" in (line or "") or "Closed" in (line or "") for line in lines[1:5])
+        assert any("60" in (line or "") or "Closed" in (line or "") for line in lines[1:-1])
 
 
 class TestTinyAbbr:
